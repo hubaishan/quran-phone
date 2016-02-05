@@ -15,12 +15,14 @@ using Windows.Graphics.Display;
 using Windows.Storage.Streams;
 using System.IO;
 using Quran.Core.Utils;
+using Microsoft.ApplicationInsights;
 
 namespace Quran.Windows.NativeProvider
 {
     public class UniversalNativeProvider : INativeProvider
     {
         DisplayRequest _keepScreenOnRequest = null;
+        private static TelemetryClient telemetry = new TelemetryClient();
 
         public double ActualWidth
         {
@@ -46,17 +48,6 @@ namespace Quran.Windows.NativeProvider
             }
         }
 
-        private IDownloadManager downloadManager;
-        public IDownloadManager DownloadManager
-        {
-            get
-            {
-                if (downloadManager == null)
-                    downloadManager = new UniversalDownloadManager();
-                return downloadManager;
-            }
-        }
-
         private ISettingsProvider settingsProvider;
         public ISettingsProvider SettingsProvider
         {
@@ -79,30 +70,39 @@ namespace Quran.Windows.NativeProvider
             }
         }
 
-        public Task ExtractZip(string source, string baseFolder)
+		public async Task ExtractZip(StorageFile source, StorageFolder baseFolder)
         {
-            return Task.Run(() =>
+            using (var fileStream = await source.OpenStreamForReadAsync())
             {
-                //ZipFile.ExtractToDirectory(source, baseFolder);
-                using (var fileStream = File.OpenRead(source))
+                ZipArchive archive = new ZipArchive(fileStream);
+                foreach (ZipArchiveEntry file in archive.Entries)
                 {
-                    ZipArchive archive = new ZipArchive(File.OpenRead(source));
-                    foreach (ZipArchiveEntry file in archive.Entries)
+                    string completeFileName = Path.Combine(baseFolder.Path, file.FullName);
+
+                    if (file.Name == "")
                     {
-                        string completeFileName = Path.Combine(baseFolder, file.FullName);
-
-                        if (file.Name == "")
-                        {
-                            // Assuming Empty for Directory
-                            Directory.CreateDirectory(Path.GetDirectoryName(completeFileName));
-                            continue;
-                        }
-
-                        file.ExtractToFile(completeFileName, true);
+                        // Assuming Empty for Directory
+                        Directory.CreateDirectory(Path.GetDirectoryName(completeFileName));
+                        continue;
                     }
+
+                    file.ExtractToFile(completeFileName, true);
                 }
-            });
+            }
         }
+
+        public async Task ExtractZip2(StorageFile source, StorageFolder baseFolder)
+        {
+            try
+            {
+                await CompressionUtils.UnZipFileAync(source, baseFolder);
+            }
+            catch (Exception ex)
+            {
+                telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "ExtractingArchive" } });
+            }
+        }
+
 
         public void CopyToClipboard(string text)
         {

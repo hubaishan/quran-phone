@@ -11,6 +11,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core.Common;
 using Quran.Core.Data;
 using Quran.Core.Properties;
@@ -26,7 +27,8 @@ namespace Quran.Core.ViewModels
     public class MainViewModel : ViewModelWithDownload
     {
         private string _zipFileServerUrl;
-        private string _zipFileLocalPath;
+        private string _zipFileName;
+        
         public MainViewModel()
         {
             this.Surahs = new ObservableCollection<ItemViewModel>();
@@ -84,8 +86,7 @@ namespace Quran.Core.ViewModels
         public override async Task Initialize()
         {
             _zipFileServerUrl = FileUtils.GetZipFileUrl();
-            _zipFileLocalPath = Path.Combine(FileUtils.GetQuranBaseDirectory(), 
-                Path.GetFileName(_zipFileServerUrl));
+            _zipFileName = Path.GetFileName(_zipFileServerUrl);
 
             if (!this.IsDataLoaded)
             {
@@ -129,22 +130,18 @@ namespace Quran.Core.ViewModels
         {
             if (!this.ActiveDownload.IsDownloading)
             {
-                //bool finalizeSucceded = true; // not used?
-
-                // kdimas: How if we include a zipped width_800 images for testing?
-                // will save cost for testing, cutting the need to always download it from server.
-#if DEBUG
-                // MAKE SURE TO EXCLUDE "Assets/Offline" folder and its content before packaging for
-                // production. (apply to WP 8 / WP 7.1).
-                prepareOfflineZip();
-#endif
                 // If downloaded offline and stuck in temp storage
-                if (await FileUtils.FileExists(_zipFileLocalPath))
+                if (await FileUtils.FileExists(FileUtils.BaseFolder, _zipFileName))
                 {
-                    await ActiveDownload.FinishDownload(_zipFileLocalPath);
+                    await ActiveDownload.FinishDownload(await FileUtils.GetFile(FileUtils.BaseFolder, _zipFileName));
+                    ActiveDownload.Reset();
+                    if (await FileUtils.HaveAllImages())
+                    {
+                        return;
+                    }
                 }
 
-                if (!await FileUtils.HaveAllImages() && !this.HasAskedToDownload)
+                if (!this.HasAskedToDownload)
                 {
                     this.HasAskedToDownload = true;
                     var askingToDownloadResult = await QuranApp.NativeProvider.ShowQuestionMessageBox(Resources.downloadPrompt,
@@ -152,7 +149,7 @@ namespace Quran.Core.ViewModels
 
                     if (askingToDownloadResult)
                     {
-                        await ActiveDownload.DownloadSingleFile(_zipFileServerUrl, _zipFileLocalPath);
+                        await ActiveDownload.DownloadSingleFile(_zipFileServerUrl, Path.Combine(FileUtils.BaseFolder.Path, _zipFileName));
                     }
                 }
             }
@@ -174,48 +171,6 @@ namespace Quran.Core.ViewModels
         #endregion Public methods
 
         #region Private methods
-        /// <summary>
-        /// Prepare offline zip for debugging purpose, this function will only be called
-        /// on debug configuration.
-        /// 
-        /// Reference: http://msdn.microsoft.com/en-us/library/Windows/develop/hh286411%28v=vs.105%29.aspx
-        /// </summary>
-        private void prepareOfflineZip()
-        {
-            //// TODO: still ERROR in device
-
-            // Move images_800.zip from Assets/Offline to temporary storage
-            Uri offlineZipUri = new Uri("Assets/Offline/images_800.zip", UriKind.Relative);
-
-            // Obtain the virtual store for the application.
-            //IsolatedStorageFile iso = IsolatedStorageFile.GetUserStoreForApplication();
-
-            // Create a stream for the file in the installation folder.
-            //var streamInfo = string.Join(",", Application.Current.Resources.Keys);
-            //if (streamInfo != null)
-            //{
-            //    using (Stream input = streamInfo.Stream)
-            //    {
-            //        // Create a stream for the new file in the local folder.
-            //        using (IsolatedStorageFileStream output = iso.CreateFile(this.QuranData.LocalUrl))
-            //        {
-            //            // Initialize the buffer.
-            //            byte[] readBuffer = new byte[4096];
-            //            int bytesRead = -1;
-
-            //            // Copy the file from the installation folder to the local folder. 
-            //            while ((bytesRead = input.Read(readBuffer, 0, readBuffer.Length)) > 0)
-            //            {
-            //                output.Write(readBuffer, 0, bytesRead);
-            //            }
-            //        }
-
-            //        this.HasAskedToDownload = true;
-            //    }
-            //}
-        }
-
-        
         private void LoadSuraList()
         {
             for (int surah = 1; surah <= Constants.SURAS_COUNT; surah++)
@@ -231,34 +186,6 @@ namespace Quran.Core.ViewModels
                     Group = QuranUtils.GetJuzTitle() + " " + QuranUtils.GetJuzFromAyah(surah, 1)
                 });
             }
-
-            //int surah = 1;
-            //int next = 1;
-            //for (int juz = 1; juz <= Constants.JUZ2_COUNT; juz++)
-            //{
-            //    Surahs.Add(new ItemViewModel
-            //    {
-            //        Id = QuranUtils.GetJuzTitle() + " " + juz,
-            //        Title = QuranUtils.GetJuzTitle() + " " + juz,
-            //        PageNumber = QuranUtils.JUZ_PAGE_START[juz - 1],
-            //        ItemType = ItemViewModelType.Header
-            //    });
-            //    next = (juz == Constants.JUZ2_COUNT) ? Constants.PAGES_LAST + 1 : QuranUtils.JUZ_PAGE_START[juz];
-
-            //    while ((surah <= Constants.SURAS_COUNT) && (QuranUtils.SURA_PAGE_START[surah - 1] < next))
-            //    {
-            //        string title = QuranUtils.GetSurahName(surah, true);
-            //        Surahs.Add(new ItemViewModel
-            //        {
-            //            Id = surah.ToString(CultureInfo.InvariantCulture),
-            //            Title = title,
-            //            Details = QuranUtils.GetSuraListMetaString(surah),
-            //            PageNumber = QuranUtils.SURA_PAGE_START[surah - 1],
-            //            ItemType = ItemViewModelType.Surah
-            //        });
-            //        surah++;
-            //    }
-            //}
         }
 
         private void LoadJuz2List()
@@ -341,6 +268,7 @@ namespace Quran.Core.ViewModels
                 }
                 catch (Exception ex)
                 {
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "LoadingBookmarks" } });
                     QuranApp.NativeProvider.Log("failed to load bookmarks: " + ex.Message);
                 }
             }
@@ -371,9 +299,9 @@ namespace Quran.Core.ViewModels
                             title = ayahSurah.Text;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        //Not able to get Arabic text - skipping
+                        telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "OpenArabicDatabase" } });
                     }
 
                     details = string.Format(CultureInfo.InvariantCulture, "{0} {1} {2}, {3} {4}",

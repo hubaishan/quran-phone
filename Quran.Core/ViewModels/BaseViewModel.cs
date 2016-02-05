@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core.Properties;
 
 namespace Quran.Core.ViewModels
@@ -20,9 +21,14 @@ namespace Quran.Core.ViewModels
     /// </summary>
     public abstract class BaseViewModel : INotifyPropertyChanged, IDisposable
     {
+        protected static TelemetryClient telemetry = new TelemetryClient();
+
         public abstract Task Initialize();
 
         public abstract Task Refresh();
+
+        LocalizedResources _resources = new LocalizedResources();
+        public LocalizedResources Strings { get { return _resources; } }
 
         private bool isLoading;
         public bool IsLoading

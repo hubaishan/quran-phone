@@ -77,7 +77,7 @@ namespace Quran.Core.ViewModels
                     var arabicVerses = new List<ArabicAyah>();
                     var taskFactory = new TaskFactory();
 
-                    if (await FileUtils.FileExists(Path.Combine(FileUtils.GetQuranDatabaseDirectory(), translationFile)))
+                    if (await FileUtils.FileExists(FileUtils.DatabaseFolder, translationFile))
                     {
                         using (var db = new QuranDatabaseHandler<QuranAyah>(Path.Combine(FileUtils.GetQuranDatabaseDirectory(), translationFile)))
                         {
@@ -144,8 +144,9 @@ namespace Quran.Core.ViewModels
                     }
                     return;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "LoadingTranslations" } });
                     this.SearchResults.Add(new ItemViewModel
                     {
                         Id = "Error",

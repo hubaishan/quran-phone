@@ -4,6 +4,8 @@ using Quran.Core.Common;
 using Quran.Core.Data;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Collections.Generic;
+using Windows.Storage;
 
 namespace Quran.Core.ViewModels
 {
@@ -17,9 +19,17 @@ namespace Quran.Core.ViewModels
             this.Id = item.Id;
             this.Name = item.Name;
             this.ServerUrl = item.ServerUrl;
-            this.LocalUrl = item.LocalPath;
+            this.LocalFolderName = item.LocalFolderName;
             this.DatabaseName = item.GaplessDatabasePath;
             this.IsGapless = item.IsGapless;
+        }
+
+        public StorageFolder BaseFolder
+        {
+            get
+            {
+                return FileUtils.AudioFolder;
+            }
         }
 
         public override Task Initialize()
@@ -29,7 +39,7 @@ namespace Quran.Core.ViewModels
 
         public override async Task Refresh()
         {
-            this.Exists = await FileUtils.DirectoryExists(LocalUrl);
+            this.Exists = await FileUtils.DirectoryExists(BaseFolder, LocalFolderName);
         }
 
         private int id;
@@ -63,7 +73,7 @@ namespace Quran.Core.ViewModels
         }
 
         private string localUrl;
-        public string LocalUrl
+        public string LocalFolderName
         {
             get { return localUrl; }
             set
@@ -73,7 +83,7 @@ namespace Quran.Core.ViewModels
 
                 localUrl = value;
 
-                base.OnPropertyChanged(() => LocalUrl);
+                base.OnPropertyChanged(() => LocalFolderName);
             }
         }
 
@@ -185,15 +195,16 @@ namespace Quran.Core.ViewModels
 
         public async void Delete()
         {
-            if (await FileUtils.DirectoryExists(this.LocalUrl))
+            if (await FileUtils.DirectoryExists(BaseFolder, this.LocalFolderName))
             {
                 try
                 {
-                    await FileUtils.DeleteFolder(this.LocalUrl);
+                    await FileUtils.DeleteFolder(BaseFolder, this.LocalFolderName);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    QuranApp.NativeProvider.Log("error deleting file " + this.LocalUrl);
+                    QuranApp.NativeProvider.Log("error deleting file " + this.LocalFolderName);
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "DeletingReciterFile" } });
                 }
             }
             else
@@ -206,15 +217,9 @@ namespace Quran.Core.ViewModels
             if (DeleteComplete != null)
                 DeleteComplete(this, null);
 
-            try
+            if (SettingsUtils.Get<string>(Constants.PREF_ACTIVE_QARI) == this.Name)
             {
-                if (SettingsUtils.Get<string>(Constants.PREF_ACTIVE_QARI) == this.Name)
-                {
-                    SettingsUtils.Set<string>(Constants.PREF_ACTIVE_QARI, string.Empty);
-                }
-            }
-            catch (Exception)
-            {
+                SettingsUtils.Set<string>(Constants.PREF_ACTIVE_QARI, string.Empty);
             }
         }
 

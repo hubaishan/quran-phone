@@ -81,7 +81,7 @@ namespace Quran.Core.ViewModels
 
         public double ScreenWidth
         {
-            get { return ScreenUtils.Instance.Width - 20; }
+            get { return FileUtils.ScreenInfo.Width - 20; }
         }
 
         // QuranUtils Properties

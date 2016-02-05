@@ -11,7 +11,7 @@ namespace Quran.Core.Common
     {
         public QuranAudioTrack() { }
 
-        public QuranAudioTrack(int reciterId, QuranAyah verse, bool isStreaming)
+        public QuranAudioTrack(int reciterId, QuranAyah verse, ScreenInfo qsi)
         {
             if (verse == null)
             {
@@ -26,7 +26,7 @@ namespace Quran.Core.Common
             this.ReciterId = reciterId;
             this.Surah = verse.Surah;
             this.Ayah = verse.Ayah;
-            this.IsStreaming = isStreaming;
+            this.ScreenInfo = qsi;
         }
         
         [DataMember]
@@ -39,7 +39,7 @@ namespace Quran.Core.Common
         public int Ayah { get; set; }
 
         [DataMember]
-        public bool IsStreaming { get; set; }
+        public ScreenInfo ScreenInfo { get; set; }
 
         public QuranAudioTrack GetNextInSurah()
         {
@@ -55,7 +55,7 @@ namespace Quran.Core.Common
         {
             return new QuranAudioTrack(ReciterId, 
                 QuranUtils.GetNextAyah(GetQuranAyah(), true), 
-                IsStreaming);
+                ScreenInfo);
         }
 
         public QuranAudioTrack GetPreviousInSurah()
@@ -72,7 +72,7 @@ namespace Quran.Core.Common
         {
             return new QuranAudioTrack(ReciterId, 
                 QuranUtils.GetPreviousAyah(GetQuranAyah(), true), 
-                IsStreaming);
+                ScreenInfo);
         }
 
         public QuranAudioTrack GetFirstAyah()
@@ -80,14 +80,14 @@ namespace Quran.Core.Common
             int firstAyah = Surah == Constants.SURA_FIRST || Surah == Constants.SURA_TAWBA ? 1 : 0;
             return new QuranAudioTrack(ReciterId,
                 new QuranAyah(Surah, firstAyah),
-                IsStreaming);
+                ScreenInfo);
         }
 
         public QuranAudioTrack GetLastAyah()
         {
             return new QuranAudioTrack(ReciterId,
                 new QuranAyah(Surah, QuranUtils.GetSurahNumberOfAyah(Surah)),
-                IsStreaming);
+                ScreenInfo);
         }
 
         public ReciterItem GetReciter()

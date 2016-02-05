@@ -29,7 +29,11 @@ namespace Quran.Core
 
         public static async Task Initialize()
         {
-            await FileUtils.Initialize(false);
+            var instance = new ScreenInfo(QuranApp.NativeProvider.ActualWidth,
+                                          QuranApp.NativeProvider.ActualHeight, 
+                                          QuranApp.NativeProvider.ScaleFactor);
+
+            await FileUtils.Initialize(instance);
         }
 
         public static async Task<AyahInfoDatabaseHandler> GetAyahInfoDatabase()
@@ -39,8 +43,8 @@ namespace Quran.Core
                 return ayahInfoDatabaseHandler;
             }
 
-            if (await FileUtils.FileExists(Path.Combine(FileUtils.GetQuranDatabaseDirectory(), 
-                FileUtils.GetAyaPositionFileName())))
+            if (await FileUtils.FileExists(FileUtils.DatabaseFolder, 
+                FileUtils.GetAyaPositionFileName()))
             {
                 ayahInfoDatabaseHandler = new AyahInfoDatabaseHandler(FileUtils.GetAyaPositionFileName());
             }

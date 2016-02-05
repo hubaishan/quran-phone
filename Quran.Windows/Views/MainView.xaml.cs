@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core;
 using Quran.Core.Data;
 using Quran.Core.Properties;
@@ -25,6 +26,8 @@ namespace Quran.Windows.Views
 {
     public partial class MainView
     {
+        private TelemetryClient telemetry = new TelemetryClient();
+
         public MainViewModel ViewModel { get; set; }
         public SearchViewModel SearchViewModel { get; set; }
         public ObservableCollection<NavigationLink> NavigationLinks = new ObservableCollection<NavigationLink>();
@@ -47,7 +50,6 @@ namespace Quran.Windows.Views
             JuzViewSource.Source = ViewModel.GetGrouppedJuzItems();
             BookmarksViewSource.Source = ViewModel.GetGrouppedBookmarks();
             BuildLocalizedMenu();
-            await LittleWatson.CheckForPreviousException();
 
             // We set the state of the commands on the appbar
             SetCommandsVisibility(BookmarksListView);
@@ -91,17 +93,14 @@ namespace Quran.Windows.Views
                 var message =
                     @"Assalamu Aleikum,
 
-Thank you for downloading Quran Windows. Please note that this is a BETA release and is still work in progress. 
-New in Version 1.1.0:
-* Re-implemented app as Windows Universal
-* Support for Phone and Desktop mode
-* Support for gapless audio playback
-* Misc new features and bug fixes
+Thank you for downloading Quran Windows. Please note that this is a BETA release and is still work in progress (especially audio support). 
+New in Version 1.2.1:
+* Misc. bug fixes
 
 If you find any issues with the app or would like to provide suggestions, please use Contact Us option available via the menu. 
 
 Jazzakum Allahu Kheiran,
-Quran Phone Team";
+Quran Windows Team";
                 await QuranApp.NativeProvider.ShowInfoMessageBox(message, "Welcome");
                 SettingsUtils.Set(Constants.PREF_CURRENT_VERSION, versionFromAssembly.ToString());
             }
@@ -117,6 +116,10 @@ Quran Phone Team";
             }
 
             var selectedItem = ((FrameworkElement)e.OriginalSource).DataContext as ItemViewModel;
+            if (selectedItem == null)
+            {
+                return;
+            }
 
             try
             {
@@ -137,8 +140,9 @@ Quran Phone Team";
                         });
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "NavigateFromMainView" } });
                 // Navigation exception - ignore
             }
 

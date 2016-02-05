@@ -9,6 +9,8 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Media.Animation;
 using Windows.Graphics.Display;
+using Windows.Foundation.Metadata;
+using Windows.Phone.UI.Input;
 
 namespace Quran.Windows.Views
 {
@@ -36,8 +38,6 @@ namespace Quran.Windows.Views
             {
                 if (tab == "general")
                     this.MainPivot.SelectedItem = this.General;
-                if (tab == "audio")
-                    this.MainPivot.SelectedItem = this.Audio;
                 if (tab == "about")
                     this.MainPivot.SelectedItem = this.About;
             }

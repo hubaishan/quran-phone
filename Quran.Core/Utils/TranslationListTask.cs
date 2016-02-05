@@ -8,6 +8,9 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
+using Newtonsoft.Json;
+using System.Net.Http;
 
 namespace Quran.Core.Utils
 {
@@ -15,6 +18,7 @@ namespace Quran.Core.Utils
     {
         public const string WEB_SERVICE_URL = "http://android.quran.com/data/translations.php?v=2";
         private const string CACHED_RESPONSE_FILE_NAME = "cached-translation-list";
+        private static TelemetryClient telemetry = new TelemetryClient();
 
         private static async Task CacheResponse(string response)
         {
@@ -26,6 +30,7 @@ namespace Quran.Core.Utils
             catch (Exception e)
             {
                 Debug.WriteLine("failed to cache response: " + e.Message);
+                telemetry.TrackException(e, new Dictionary<string, string> { { "Scenario", "CacheTranslationList" } });
             }
         }
 
@@ -57,13 +62,10 @@ namespace Quran.Core.Utils
             bool refreshed = false;
             if (string.IsNullOrEmpty(text))
             {
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(WEB_SERVICE_URL);
-                request.Method = HttpMethod.Get;
-                var response = await request.GetResponseAsync();
-                using (var sr = new StreamReader(response.GetResponseStream()))
-                {
-                    text = sr.ReadToEnd();
-                }
+                HttpClient httpClient = new HttpClient();
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, WEB_SERVICE_URL);
+                var response = await httpClient.SendAsync(request);
+                text = await response.Content.ReadAsStringAsync();
 
                 if (string.IsNullOrEmpty(text))
                 {
@@ -108,8 +110,7 @@ namespace Quran.Core.Utils
                         item.Name = item.Name.Substring(0, firstParen - 1);
                     }
 
-                    string databaseDir = FileUtils.GetQuranDatabaseDirectory();
-                    item.Exists = await FileUtils.FileExists(Path.Combine(databaseDir, item.Filename));
+                    item.Exists = await FileUtils.FileExists(FileUtils.DatabaseFolder, item.Filename);
 
                     items.Add(item);
                 }
@@ -119,9 +120,9 @@ namespace Quran.Core.Utils
                     SettingsUtils.Set<DateTime>(Constants.PREF_LAST_UPDATED_TRANSLATIONS, DateTime.Now);
                 }
             }
-            catch (Exception je)
+            catch (JsonException je)
             {
-                Debug.WriteLine("error parsing json: " + je.Message);
+                telemetry.TrackException(je, new Dictionary<string, string> { { "Scenario", "ParsingDownloadedTranslationJson" } });
             }
 
             return items;

@@ -45,17 +45,6 @@ namespace Quran.Core.Tests
             }
         }
 
-        private IDownloadManager downloadManager;
-        public IDownloadManager DownloadManager
-        {
-            get
-            {
-                if (downloadManager == null)
-                    downloadManager = new MockDownloadManager();
-                return downloadManager;
-            }
-        }
-
         private ISettingsProvider settingsProvider;
         public ISettingsProvider SettingsProvider
         {
@@ -78,29 +67,9 @@ namespace Quran.Core.Tests
             }
         }
 
-        public Task ExtractZip(string source, string baseFolder)
+        public Task ExtractZip(StorageFile source, StorageFolder baseFolder)
         {
-            return Task.Run(() =>
-            {
-                //ZipFile.ExtractToDirectory(source, baseFolder);
-                using (var fileStream = File.OpenRead(source))
-                {
-                    ZipArchive archive = new ZipArchive(File.OpenRead(source));
-                    foreach (ZipArchiveEntry file in archive.Entries)
-                    {
-                        string completeFileName = Path.Combine(baseFolder, file.FullName);
-
-                        if (file.Name == "")
-                        {
-                            // Assuming Empty for Directory
-                            Directory.CreateDirectory(Path.GetDirectoryName(completeFileName));
-                            continue;
-                        }
-
-                        file.ExtractToFile(completeFileName, true);
-                    }
-                }
-            });
+            return Task.FromResult(0);
         }
 
         public void CopyToClipboard(string text)

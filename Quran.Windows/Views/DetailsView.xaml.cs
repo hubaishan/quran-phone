@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core;
 using Quran.Core.Common;
 using Quran.Core.Data;
@@ -25,6 +26,8 @@ namespace Quran.Windows.Views
         public DetailsViewModel ViewModel { get; set; }
         public ObservableCollection<NavigationLink> NavigationLinks = new ObservableCollection<NavigationLink>();
         private DataTransferManager _dataTransferManager;
+        private NavigationLink _bookmarkNavigationLink;
+        private TelemetryClient telemetry = new TelemetryClient();
 
         public DetailsView()
         {
@@ -62,12 +65,16 @@ namespace Quran.Windows.Views
                 {
                     if (ViewModel.CurrentPageIndex != -1)
                     {
-                        radSlideView.SelectedItem = ViewModel.Pages[ViewModel.CurrentPageIndex];
+                        radSlideView.SelectedItem = ViewModel.Pages[ViewModel.CurrentPageIndex];                        
                     }
                 }
                 if (args.PropertyName == "AudioPlayerState")
                 {
                     UpdateAudioControls(ViewModel.AudioPlayerState);
+                }
+                if (args.PropertyName == "CurrentPageBookmarked")
+                {
+                    SetBookmarkNavigationLink();
                 }
             };
 
@@ -82,7 +89,14 @@ namespace Quran.Windows.Views
                     ViewModel.Pages.Clear();
                 }
                 ViewModel.TranslationFile = translation.Split('|')[0];
-                ViewModel.ShowTranslation = SettingsUtils.Get<bool>(Constants.PREF_SHOW_TRANSLATION);
+                if (await ViewModel.HasTranslationFile())
+                {
+                    ViewModel.ShowTranslation = SettingsUtils.Get<bool>(Constants.PREF_SHOW_TRANSLATION);
+                }
+                else
+                {
+                    ViewModel.ShowTranslation = false;
+                }
                 ViewModel.ShowArabicInTranslation = SettingsUtils.Get<bool>(Constants.PREF_SHOW_ARABIC_IN_TRANSLATION);
             }
             else
@@ -140,8 +154,11 @@ namespace Quran.Windows.Views
                 if (currentPage != null)
                 {
                     ViewModel.SelectedAyah = ayah;
-                    ViewModel.ShowTranslation = !ViewModel.ShowTranslation;
-                    SettingsUtils.Set(Constants.PREF_SHOW_TRANSLATION, ViewModel.ShowTranslation);
+                    if (await ViewModel.HasTranslationFile())
+                    {
+                        ViewModel.ShowTranslation = !ViewModel.ShowTranslation;
+                        SettingsUtils.Set(Constants.PREF_SHOW_TRANSLATION, ViewModel.ShowTranslation);
+                    }
                 }
             }
         }
@@ -160,8 +177,12 @@ namespace Quran.Windows.Views
                 {
                     ViewModel.SelectedAyah = new QuranAyah(selectedVerse.Surah, selectedVerse.Ayah);
                 }
-                ViewModel.ShowTranslation = !ViewModel.ShowTranslation;
-                SettingsUtils.Set(Constants.PREF_SHOW_TRANSLATION, ViewModel.ShowTranslation);
+
+                if (await ViewModel.HasTranslationFile())
+                {
+                    ViewModel.ShowTranslation = !ViewModel.ShowTranslation;
+                    SettingsUtils.Set(Constants.PREF_SHOW_TRANSLATION, ViewModel.ShowTranslation);
+                }
             }
         }
 
@@ -226,9 +247,14 @@ namespace Quran.Windows.Views
                 }
                 else
                 {
-                    if (await ViewModel.PlayFromAyah(selectedAyah.Surah, selectedAyah.Ayah))
+                    try
                     {
+                        await ViewModel.PlayFromAyah(selectedAyah);
                         UpdateAudioControls(AudioState.Playing);
+                    }
+                    catch (Exception ex)
+                    {
+                        telemetry.TrackException(ex);
                     }
                 }
             }
@@ -372,12 +398,15 @@ namespace Quran.Windows.Views
                 Symbol = Symbol.Globe,
                 Action = TranslationClick
             });
-            NavigationLinks.Add(new NavigationLink
+            _bookmarkNavigationLink = new NavigationLink
             {
-                Label = Quran.Core.Properties.Resources.bookmark,
-                Symbol = Symbol.SolidStar,
-                Action = () => { ViewModel.AddPageBookmark(); }
-            });
+                Action = () => 
+                {
+                    ViewModel.TogglePageBookmark();
+                }
+            };
+            SetBookmarkNavigationLink();
+            NavigationLinks.Add(_bookmarkNavigationLink);
             NavigationLinks.Add(new NavigationLink
             {
                 Label = Quran.Core.Properties.Resources.recite,
@@ -393,10 +422,24 @@ namespace Quran.Windows.Views
             NavigationLinks.Add(keepOrientationLink);
         }
 
-        private void TranslationClick()
+        private void SetBookmarkNavigationLink()
+        {
+            if (ViewModel.CurrentPageBookmarked)
+            {
+                _bookmarkNavigationLink.Label = Quran.Core.Properties.Resources.delete_bookmark;
+                _bookmarkNavigationLink.Symbol = Symbol.SolidStar;
+            }
+            else
+            {
+                _bookmarkNavigationLink.Label = Quran.Core.Properties.Resources.bookmark;
+                _bookmarkNavigationLink.Symbol = Symbol.OutlineStar;
+            }
+        }
+
+        private async void TranslationClick()
         {
             int pageNumber = ViewModel.CurrentPageNumber;
-            if (!string.IsNullOrEmpty(ViewModel.TranslationFile))
+            if (await ViewModel.HasTranslationFile())
             {
                 ViewModel.ShowTranslation = !ViewModel.ShowTranslation;
                 SettingsUtils.Set(Constants.PREF_SHOW_TRANSLATION, ViewModel.ShowTranslation);
@@ -479,9 +522,14 @@ namespace Quran.Windows.Views
             }
             else
             {
-                if (await ViewModel.Play())
+                try
                 {
+                    await ViewModel.Play();
                     UpdateAudioControls(AudioState.Playing);
+                } 
+                catch (Exception ex)
+                {
+                    telemetry.TrackException(ex);
                 }
             }
         }

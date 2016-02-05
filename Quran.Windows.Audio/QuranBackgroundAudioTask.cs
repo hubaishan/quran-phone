@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core;
 using Quran.Core.Common;
 using Quran.Core.Utils;
@@ -21,7 +22,6 @@ namespace Quran.Windows.Audio
 {
     public sealed class QuranBackgroundAudioTask : IBackgroundTask
     {
-        private const string TrackIdKey = "trackid";
         private const string TitleKey = "title";
         private const string QuranTrackKey = "quranTrack";
         private const string ReciterKey = "reciter";
@@ -38,7 +38,7 @@ namespace Quran.Windows.Audio
         private QuranAudioTrack _originalTrackRequest;
         private ManualResetEvent _backgroundTaskStarted = new ManualResetEvent(false);
         private BackgroundTaskDeferral _deferral; // Used to keep task alive
-
+        private TelemetryClient telemetry = new TelemetryClient();
 
         public void Run(IBackgroundTaskInstance taskInstance)
         {
@@ -124,7 +124,7 @@ namespace Quran.Windows.Audio
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.ToString());
+                        telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "BackgroundAudioButtonPressed" } });
                     }
                     break;
                 case SystemMediaTransportControlsButton.Next:
@@ -159,7 +159,7 @@ namespace Quran.Windows.Audio
             {
                 if ((uint)ex.HResult == E_ABORT)
                 {
-                    // do nothing
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "BackgroundAudioStateChanged" } });
                 }
                 else
                 {
@@ -294,16 +294,34 @@ namespace Quran.Windows.Audio
             }
 
             // Initialize FileUtils
-            await FileUtils.Initialize(true);
+            await FileUtils.Initialize(newTrack.ScreenInfo);
+
+            var missingFiles = await AudioUtils.GetMissingFiles(newTrack);
 
             // Add playback items to the list
             QuranAudioTrack nextTrack = newTrack.GetFirstAyah();
+            var reciter = nextTrack.GetReciter();
             while (nextTrack != null)
             {
-                var reciter = nextTrack.GetReciter();
-                string serverUrl = AudioUtils.GetServerPathForAyah(nextTrack.GetQuranAyah(), reciter);
-                MediaSource source = MediaSource.CreateFromUri(new Uri(serverUrl));
-                source.CustomProperties[TrackIdKey] = serverUrl;
+                string fileName = AudioUtils.GetFileName(nextTrack.GetQuranAyah(), reciter);
+                MediaSource source;
+                if (missingFiles.Contains(fileName))
+                {
+                    source = MediaSource.CreateFromUri(new Uri(Path.Combine(reciter.ServerUrl, fileName)));
+                }
+                else
+                {
+                    var file = await FileUtils.GetFile(await reciter.GetStorageFolder(), fileName);
+                    if (file != null)
+                    {
+                        source = MediaSource.CreateFromStorageFile(file);
+                        //source = MediaSource.CreateFromUri(new Uri(file.Path));
+                    }
+                    else
+                    {
+                        source = MediaSource.CreateFromUri(new Uri(Path.Combine(reciter.ServerUrl, fileName)));
+                    }
+                }
                 source.CustomProperties[SurahKey] = nextTrack.Surah;
                 source.CustomProperties[AyahKey] = nextTrack.Ayah;
                 source.CustomProperties[ReciterKey] = nextTrack.ReciterId;
@@ -334,6 +352,7 @@ namespace Quran.Windows.Audio
             }
             catch (Exception ex)
             {
+                telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "BackgroundAudioPlay" } });
                 Debug.WriteLine(ex.ToString());
             }
         }
@@ -345,7 +364,8 @@ namespace Quran.Windows.Audio
         /// <param name="args"></param>
         async void MediaPlayerMediaEnded(MediaPlayer sender, object args)
         {
-            if (_originalTrackRequest != null)
+            if (_originalTrackRequest != null && 
+                _playbackList.CurrentItemIndex == _playbackList.Items.Count - 1)
             {
                 await ChangeTrack(_originalTrackRequest.GetLastAyah().GetNext());
             }
@@ -481,7 +501,7 @@ namespace Quran.Windows.Audio
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.ToString());
+                telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "BackgroundAudioCancel" } });
             }
             _deferral.Complete(); // signals task completion. 
             Debug.WriteLine("MyBackgroundAudioTask Cancel complete...");

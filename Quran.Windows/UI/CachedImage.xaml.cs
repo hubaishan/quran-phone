@@ -1,22 +1,27 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq.Expressions;
+using System.Net;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
 using Quran.Core;
 using Quran.Core.Common;
-using Quran.Core.Utils;
-using Quran.Windows.Utils;
 using Quran.Core.Data;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Media.Imaging;
-using Windows.UI.Xaml;
+using Quran.Core.Utils;
+using Quran.Core.ViewModels;
+using Quran.Windows.Utils;
 using Windows.Foundation;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Shapes;
-using Windows.UI;
-using Windows.UI.Xaml.Input;
-using System.Threading.Tasks;
 using Windows.Storage;
-using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.UI;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
+using Windows.UI.Xaml.Shapes;
 
 namespace Quran.Windows.UI
 {
@@ -26,13 +31,14 @@ namespace Quran.Windows.UI
 
         private WriteableBitmap imageSourceBitmap;
         private Uri imageSourceUri;
+        private static TelemetryClient telemetry = new TelemetryClient();
 
         public CachedImage()
         {
             imageSourceBitmap = new WriteableBitmap(1, 1);
             InitializeComponent();
-            canvas.Width = ScreenUtils.Instance.ImageWidth;
-            canvas.Height = ScreenUtils.Instance.ImageHeight;
+            canvas.Width = FileUtils.ScreenInfo.ImageWidth;
+            canvas.Height = FileUtils.ScreenInfo.ImageHeight;
         }
 
         public Image Image
@@ -116,9 +122,9 @@ namespace Quran.Windows.UI
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    //Ignore
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "UpdateSelectedAyahInImage" } });
                 }
             }
         }
@@ -171,43 +177,51 @@ namespace Quran.Windows.UI
                     return;
                 }
 
-                var uriBuilder = new UriBuilder(source);
-                var localPath = System.IO.Path.Combine(FileUtils.GetQuranDirectory(), System.IO.Path.GetFileName(uriBuilder.Path));
-                bool downloadSuccessful = true;
-
-                if (source.Scheme == "http")
-                {
-                    try
-                    {
-                        if (!await FileUtils.FileExists(localPath))
-                        {
-                            downloadSuccessful =
-                                await FileUtils.DownloadFileFromWebAsync(source.ToString(), localPath);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        await QuranApp.NativeProvider.ShowErrorMessageBox("Error loading quran page:" + ex.ToString());
-                        downloadSuccessful = false;
-                    }
-
-                }
-                else
-                {
-                    localPath = source.LocalPath;
-                }
+                string fileName = System.IO.Path.GetFileName(source.AbsoluteUri);
+                string tempFileName = $"{fileName}{DownloadableViewModelBase.DownloadExtension}";
+                StorageFile localFile = await FileUtils.GetFile(FileUtils.ImageFolder, fileName);
 
                 try
                 {
-                    if (downloadSuccessful)
-                        await loadImageFromLocalPath(localPath);
-                    else
-                        throw new Exception();
+                    if (localFile == null)
+                    {
+                        StorageFile localTempFile = await FileUtils.GetFile(FileUtils.ImageFolder, tempFileName);
+                        if (!await FileUtils.FileExists(FileUtils.ImageFolder, tempFileName))
+                        {
+                            // Download file and copy
+                            localTempFile = await FileUtils.ImageFolder.CreateFileAsync(tempFileName, CreationCollisionOption.ReplaceExisting);
+                            if (await FileUtils.DownloadFileFromWebAsync(source.AbsoluteUri, localTempFile.Path))
+                            {
+                                await FileUtils.MoveFile(localTempFile, FileUtils.ImageFolder, fileName);
+                                localFile = await FileUtils.GetFile(FileUtils.ImageFolder, fileName);
+                            }
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
+                {
+                    await QuranApp.NativeProvider.ShowErrorMessageBox("Error downloading quran page:" + ex.ToString());
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "ErrorDownloadingPageImageFromUri" } });
+                    localFile = null;
+                }
+
+
+                try
+                {
+                    if (localFile != null)
+                    {
+                        await LoadImageFromLocalPath(localFile);
+                    }
+                    else
+                    {
+                        await LoadImageFromUrl(source);
+                    }
+                }
+                catch (Exception ex)
                 {
                     await QuranApp.NativeProvider.ShowErrorMessageBox("Error loading quran page.");
-                    await FileUtils.SafeFileDelete(localPath);
+                    telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "ErrorLoadingPageImageFromFile" } });
+                    await FileUtils.SafeFileDelete(localFile);
                 }
                 finally
                 {
@@ -219,9 +233,8 @@ namespace Quran.Windows.UI
             }
         }
 
-        private async Task loadImageFromLocalPath(string localPath)
+        private async Task LoadImageFromLocalPath(StorageFile imageFile)
         {
-            var imageFile = await StorageFile.GetFileFromPathAsync(localPath);
             using (var imageFileStream = await imageFile.OpenReadAsync())
             {
                 var bitmap = new WriteableBitmap(1, 1); // avoid creating intermediate BitmapImage
@@ -240,6 +253,16 @@ namespace Quran.Windows.UI
                 imageSourceBitmap = bitmap;
                 progress.Visibility = Visibility.Collapsed;
             }
+        }
+
+        private async Task LoadImageFromUrl(Uri url)
+        {
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            var response = await request.GetResponseAsync();
+            var bitmap = new WriteableBitmap(1, 1); // avoid creating intermediate BitmapImage
+            await bitmap.SetSourceAsync(response.GetResponseStream().AsRandomAccessStream());
+            imageSourceBitmap = bitmap;
         }
 
         private async Task InvertColors(WriteableBitmap bitmap)
@@ -359,8 +382,9 @@ namespace Quran.Windows.UI
                     return ayahDb.GetVerseAtPoint(pageNumber, position.X, position.Y);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                telemetry.TrackException(ex, new Dictionary<string, string> { { "Scenario", "OpeningAyahInfoDatabase" } });
                 // Ignore
             }
             return null;
@@ -378,7 +402,7 @@ namespace Quran.Windows.UI
 
         private static Point adjustPoint(Point p, double width)
         {
-            var imageWidth = ScreenUtils.Instance.ImageWidth;
+            var imageWidth = FileUtils.ScreenInfo.ImageWidth;
             var actualWidth = width;
             var scale = imageWidth/actualWidth;
             return new Point(p.X*scale, p.Y*scale);
@@ -386,7 +410,7 @@ namespace Quran.Windows.UI
 
         private static Point adjustPointRevert(Point p, double width)
         {
-            var imageWidth = ScreenUtils.Instance.ImageWidth;
+            var imageWidth = FileUtils.ScreenInfo.ImageWidth;
             var actualWidth = width;
             var scale = imageWidth / actualWidth;
             return new Point(p.X / scale, p.Y / scale);

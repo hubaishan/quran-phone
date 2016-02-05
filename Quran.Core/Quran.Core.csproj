@@ -11,8 +11,8 @@
     <AssemblyName>Quran.Core</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <TargetPlatformVersion>10.0.10240.0</TargetPlatformVersion>
-    <TargetPlatformMinVersion>10.0.10240.0</TargetPlatformMinVersion>
+    <TargetPlatformVersion>10.0.10586.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.10586.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -97,10 +97,11 @@
     <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
     <Optimize>true</Optimize>
     <NoWarn>;2008</NoWarn>
-    <DebugType>pdbonly</DebugType>
+    <DebugType>full</DebugType>
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
     <!-- A reference to the entire .Net Framework and Windows SDK are automatically included -->
@@ -117,7 +118,6 @@
     <Compile Include="BackgroundTask\TrackChangedMessage.cs" />
     <Compile Include="Common\AudioPlayerPlayState.cs" />
     <Compile Include="Common\QuranAudioTrack.cs" />
-    <Compile Include="Common\AudioRequest.cs" />
     <Compile Include="Common\AudioState.cs" />
     <Compile Include="Common\AudioTransferEventArgs.cs" />
     <Compile Include="Common\AyahBounds.cs" />
@@ -130,8 +130,6 @@
     <Compile Include="Common\ReciterItem.cs" />
     <Compile Include="Common\Rectangle.cs" />
     <Compile Include="Common\RelayCommand.cs" />
-    <Compile Include="Common\RepeatInfo.cs" />
-    <Compile Include="Common\RepeatManager.cs" />
     <Compile Include="Common\Tags.cs" />
     <Compile Include="Common\Timings.cs" />
     <Compile Include="Common\TransferEventArgs.cs" />
@@ -150,7 +148,6 @@
     <Compile Include="Data\SuraTimingDatabaseHandler.cs" />
     <Compile Include="Data\TranslationsDatabaseHandler.cs" />
     <Compile Include="Interfaces\IAudioProvider.cs" />
-    <Compile Include="Interfaces\IDownloadManager.cs" />
     <Compile Include="Interfaces\INativeProvider.cs" />
     <Compile Include="Interfaces\ISettingsProvider.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -162,12 +159,13 @@
     </Compile>
     <Compile Include="Utils\ArabicResharper.cs" />
     <Compile Include="Utils\AudioUtils.cs" />
+    <Compile Include="Utils\CompressionUtils.cs" />
     <Compile Include="Utils\CryptoUtils.cs" />
     <Compile Include="Utils\FileUtils.cs" />
     <Compile Include="Utils\HttpExtensions.cs" />
     <Compile Include="Utils\MD5.cs" />
     <Compile Include="Utils\QuranUtils.cs" />
-    <Compile Include="Utils\ScreenUtils.cs" />
+    <Compile Include="Utils\ScreenInfo.cs" />
     <Compile Include="Utils\SettingsUtils.cs" />
     <Compile Include="Utils\TranslationListTask.cs" />
     <Compile Include="Utils\TranslationUtils.cs" />
@@ -187,6 +185,7 @@
     <Compile Include="ViewModels\RecitersListViewModel.cs" />
     <Compile Include="ViewModels\SearchViewModel.cs" />
     <Compile Include="ViewModels\SettingsViewModel.cs" />
+    <Compile Include="ViewModels\SurahDownloadViewModel.cs" />
     <Compile Include="ViewModels\TranslationsListViewModel.cs" />
     <Compile Include="ViewModels\VerseViewModel.cs" />
     <Compile Include="ViewModels\ViewModelWithDownload.cs" />
